@@ -1,0 +1,143 @@
+esphome:
+  name: blind
+  platform: ESP8266
+  board: d1_mini_lite
+
+wifi:
+  ssid: "SSID"
+  password: "SSIDPWD"
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+ota:
+
+#############################
+# TIME: open cover based on time
+#############################
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    on_time:
+    - seconds: 0
+      minutes: 30
+      hours: 8
+      days_of_week: MON-FRI
+      then:
+      - cover.open: lichtkoepel
+    - seconds: 0
+      minutes: 30
+      hours: 9
+      days_of_week: SAT-SUN
+      then:
+      - cover.open: lichtkoepel
+    - seconds: 0
+      minutes: 05
+      hours: 20
+      then:
+      - cover.close: lichtkoepel
+
+#############################
+#############################
+# Switches for Cover
+#############################
+#############################
+switch:
+  ###########################
+  # instruct motor to CLOSE #
+  ###########################
+  - platform: gpio
+    pin: D4
+    id: close_pin
+    # Use interlocking to keep at most one of the two directions on
+    interlock: &interlock_group [close_pin, open_pin]
+    # If ESP reboots, do not attempt to restore switch state
+    restore_mode: always off
+
+  ###########################
+  # instruct motor to OPEN  #
+  ###########################
+  - platform: gpio
+    pin: D3
+    id: open_pin
+    interlock: *interlock_group
+    restore_mode: always off
+
+
+binary_sensor:
+  #########################
+  # ENDSTOP CLOSED ########
+  #########################
+  - platform: gpio
+    pin: D1
+    id: closed_endstop
+    filters:
+    - invert:
+  #########################
+  # ENDSTOP OPENED ########
+  #########################
+  - platform: gpio
+    pin: D7
+    id: opened_endstop
+    filters:
+    - invert:
+  #########################
+  # OPEN BUTTON    ########
+  #########################
+  - platform: gpio
+    id: open_button
+    pin: D5
+    on_press:
+      if:
+        condition:
+          # if we are closing, stop:
+          switch.is_on: close_pin
+        then:
+          - cover.stop: lichtkoepel
+        else:
+          - cover.open: lichtkoepel
+
+  #########################
+  # CLOSE BUTTON   ########
+  #########################
+  - platform: gpio
+    id: close_button
+    pin: D6
+    on_press:
+      if:
+        condition:
+          # if we are opening, stop:
+          switch.is_on: open_pin
+        then:
+          - cover.stop: lichtkoepel
+        else:
+          - cover.close: lichtkoepel
+
+  
+#############################
+#############################
+# COVER              ########
+#############################
+#############################
+cover:
+  - platform: endstop
+    name: "lichtkoepel"
+    id: lichtkoepel
+    
+    open_action:
+      - switch.turn_on: open_pin
+    open_duration: 16s
+    open_endstop: opened_endstop
+
+    close_action:
+      - switch.turn_on: close_pin
+    close_duration: 16s
+    close_endstop: closed_endstop
+    stop_action:
+      - switch.turn_off: close_pin
+      - switch.turn_off: open_pin
+    max_duration: 30s
+    
